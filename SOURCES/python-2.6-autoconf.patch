@@ -1,0 +1,11 @@
+--- Python-2.6/configure.in.autoconf	2008-09-07 14:18:16.000000000 -0500
++++ Python-2.6/configure.in	2009-03-09 16:12:38.000000000 -0500
+@@ -7,7 +7,7 @@
+ m4_define(PYTHON_VERSION, 2.6)
+ 
+ AC_REVISION($Revision: 66295 $)
+-AC_PREREQ(2.61)
++AC_PREREQ(2.59)
+ AC_INIT(python, PYTHON_VERSION, http://www.python.org/python-bugs)
+ AC_CONFIG_SRCDIR([Include/object.h])
+ AC_CONFIG_HEADER(pyconfig.h)

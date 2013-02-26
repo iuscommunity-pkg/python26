@@ -1,0 +1,120 @@
+--- Python-2.6.2/configure.in.canonicalize	2009-03-30 12:56:14.000000000 -0500
++++ Python-2.6.2/configure.in	2009-09-15 13:34:24.000000000 -0500
+@@ -2454,7 +2454,8 @@
+ AC_MSG_RESULT(MACHDEP_OBJS)
+ 
+ # checks for library functions
+-AC_CHECK_FUNCS(alarm setitimer getitimer bind_textdomain_codeset chown \
++AC_CHECK_FUNCS(alarm setitimer getitimer bind_textdomain_codeset \
++ canonicalize_file_name chown \
+  clock confstr ctermid execv fchmod fchown fork fpathconf ftime ftruncate \
+  gai_strerror getgroups getlogin getloadavg getpeername getpgid getpid \
+  getpriority getpwent getspnam getspent getsid getwd \
+--- Python-2.6.2/pyconfig.h.in.canonicalize	2008-09-07 00:15:18.000000000 -0500
++++ Python-2.6.2/pyconfig.h.in	2009-09-15 13:35:07.000000000 -0500
+@@ -79,6 +79,9 @@
+ /* Define to 1 if you have the `chflags' function. */
+ #undef HAVE_CHFLAGS
+ 
++/* Define to 1 if you have the `canonicalize_file_name' function. */
++#undef HAVE_CANONICALIZE_FILE_NAME
++
+ /* Define to 1 if you have the `chown' function. */
+ #undef HAVE_CHOWN
+ 
+--- Python-2.6.2/Python/sysmodule.c.canonicalize	2009-01-13 18:08:09.000000000 -0600
++++ Python-2.6.2/Python/sysmodule.c	2009-09-01 11:40:09.000000000 -0500
+@@ -1530,11 +1530,13 @@
+ void
+ PySys_SetArgv(int argc, char **argv)
+ {
++#ifndef HAVE_CANONICALIZE_FILE_NAME
+ #if defined(HAVE_REALPATH)
+ 	char fullpath[MAXPATHLEN];
+ #elif defined(MS_WINDOWS) && !defined(MS_WINCE)
+ 	char fullpath[MAX_PATH];
+ #endif
++#endif
+ 	PyObject *av = makeargvobject(argc, argv);
+ 	PyObject *path = PySys_GetObject("path");
+ 	if (av == NULL)
+@@ -1546,6 +1548,64 @@
+ 		char *p = NULL;
+ 		Py_ssize_t n = 0;
+ 		PyObject *a;
++#ifdef HAVE_CANONICALIZE_FILE_NAME
++               char *link = NULL, *argv0copy = NULL;
++                
++                if (argc > 0 && argv0 != NULL) {
++
++                       link = canonicalize_file_name(argv0);
++                       if (link == NULL) {
++                               link = strdup(argv0);
++                               if (!link)
++                                       Py_FatalError("no mem for sys.argv");
++                       }
++               }
++               if (link) {
++                       if (link[0] == SEP) /* Link to absolute path */
++                               argv0 = link;
++                       else if (strchr(link, SEP) == NULL) {
++                               /* Link without path */
++                               /* strdup argv0 so we can free it 
++                                  unconditionally */
++                               argv0 = strdup(argv0);
++                               if (!argv0)
++                                       Py_FatalError("no mem for sys.argv");
++                               free(link);
++                       } else {
++                               /* Must join(dirname(argv0), link) */
++                               char *q = strrchr(argv0, SEP);
++                               if (q == NULL) /* argv0 without path */
++                                       argv0 = link;
++                               else {
++                                       /* Must make a copy */
++                                       argv0copy = calloc(
++                                                strlen(link) + strlen(q) +1,
++                                                sizeof (char));
++                                       if (!argv0copy)
++                                               Py_FatalError("no mem for sys.argv");
++                                       strcpy(argv0copy, argv0);
++                                       q = strrchr(argv0copy, SEP);
++                                       strcpy(argv0copy+1, link);
++                                       argv0 = argv0copy;
++                                       p = NULL;
++                                       free(link);
++                               }
++                       }
++               }
++               if (argc > 0 && argv0 != NULL) {
++                       char *q;
++                       p = strrchr(argv0, SEP);
++                       /* Test for alternate separator */
++                       q = strrchr(p ? p : argv0, '/');
++                       if (q != NULL)
++                               p = q;
++                       if (p != NULL) {
++                               n = p + 1 - argv0;
++                               if (n > 1 && p[-1] != ':')
++                                       n--; /* Drop trailing separator */
++                       }
++               }
++#else /* ! HAVE_CANONICALIZE_FILE_NAME */
+ #ifdef HAVE_READLINK
+ 		char link[MAXPATHLEN+1];
+ 		char argv0copy[2*MAXPATHLEN+1];
+@@ -1621,9 +1681,14 @@
+ #endif /* Unix */
+ 		}
+ #endif /* All others */
++#endif /* ! HAVE_CANONICALIZE_FILE_NAME */
+ 		a = PyString_FromStringAndSize(argv0, n);
+ 		if (a == NULL)
+ 			Py_FatalError("no mem for sys.path insertion");
++#ifdef HAVE_CANONICALIZE_FILE_NAME
++               if (argc > 0 && argv0 != NULL)
++                       free(argv0);
++#endif /* HAVE_CANONICALIZE_FILE_NAME */
+ 		if (PyList_Insert(path, 0, a) < 0)
+ 			Py_FatalError("sys.path.insert(0) failed");
+ 		Py_DECREF(a);
